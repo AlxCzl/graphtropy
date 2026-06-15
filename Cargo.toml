@@ -27,7 +27,7 @@ opt-level = 2
 [package.metadata.bundle]
 name = "Graphtropy"
 identifier = "com.github.graphtropy"
-icon = ["images/icon.png"]
+icon = ["graphtropy.icns"]
 category = "Utilities"
 short_description = "Interactive binary entropy visualizer"
 long_description = "Fast, lightweight and interactive binary entropy visualizer with hex viewer and PNG exporter"

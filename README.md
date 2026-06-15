@@ -29,15 +29,16 @@ This builds and installs the binary via `cargo install`, and sets up the `.deskt
 ### On macOS
 
 ```bash
-cargo install --path .
+./install.sh
 ```
 
-The GUI works on macOS without extra runtime dependencies. `cargo install` installs the `graphtropy` binary into your Cargo bin directory.
+This creates an app bundle with proper icon support and installs it to `/Applications`. The app will appear with its icon in the Command+Tab app switcher.
 
-To only build the binary without installation:
+Alternatively, to just build without installing:
 
-```
+```bash
 cargo build --release
+./target/release/graphtropy
 ```
 
 ## Usage
