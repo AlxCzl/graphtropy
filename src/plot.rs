@@ -80,18 +80,17 @@ pub fn render(
             plot_ui.pointer_coordinate()
         });
 
-    if let Some(coord) = response.inner {
-        *last_hover_x = Some(coord.x);
+    let plot_hovered = response.response.hovered();
+
+    if plot_hovered {
+        if let Some(coord) = response.inner {
+            *last_hover_x = Some(coord.x);
+        }
     }
 
     let plot_rect = response.response.rect;
-    let pointer_in_rect = ui.input(|i| {
-        i.pointer
-            .latest_pos()
-            .is_some_and(|pos| plot_rect.contains(pos))
-    });
 
-    if pointer_in_rect {
+    if plot_hovered {
         let scroll_y = ui.input(|i| i.raw_scroll_delta.y);
 
         if scroll_y != 0.0 {
