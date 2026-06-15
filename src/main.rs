@@ -2,7 +2,7 @@ use std::fs::File;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use clap::Parser;
+use clap::{CommandFactory, Parser};
 use memmap2::Mmap;
 
 mod app;
@@ -95,7 +95,11 @@ fn main() -> eframe::Result {
                 .pick_file();
             match picked {
                 Some(p) => p,
-                None => std::process::exit(0),
+                None => {
+                    eprintln!("No file selected.\n");
+                    Cli::command().print_help().ok();
+                    std::process::exit(1);
+                }
             }
         }
     };
