@@ -9,6 +9,7 @@ use egui_plot::PlotPoint;
 
 use crate::entropy::{Algorithm, EntropyData};
 use crate::export::ExportConfig;
+use crate::hexview::{HexColorTheme, load_hex_color_themes};
 use crate::options::Options;
 
 type GradientFn = Arc<dyn Fn(PlotPoint) -> Color32 + Send + Sync>;
@@ -38,6 +39,9 @@ pub struct App {
     last_hover_x: Option<f64>,
     hex_focused: bool,
     hex_selection: Option<(usize, usize)>,
+    hex_byte_colors_enabled: bool,
+    hex_color_theme_index: usize,
+    hex_color_themes: Vec<HexColorTheme>,
     options: Options,
     view_x_min: f64,
     view_x_max: f64,
@@ -87,6 +91,11 @@ fn spawn_compute(
 impl App {
     pub fn new(mmap: Arc<Mmap>, file_info: FileInfo) -> Self {
         let options = Options::new(file_info.block_size, file_info.step);
+        let hex_color_themes = load_hex_color_themes();
+        let hex_color_theme_index = hex_color_themes
+            .iter()
+            .position(|theme| theme.name == "Rainbow")
+            .unwrap_or(0);
         let x_max = file_info.size as f64;
         let cached_gradient = build_gradient(&options);
         let export_path = file_info.path.with_extension("png")
@@ -103,6 +112,9 @@ impl App {
             last_hover_x: None,
             hex_focused: false,
             hex_selection: None,
+            hex_byte_colors_enabled: true,
+            hex_color_theme_index,
+            hex_color_themes,
             options,
             view_x_min: 0.0,
             view_x_max: x_max,
@@ -399,6 +411,18 @@ impl eframe::App for App {
             .show(ctx, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     self.options.render_panel(ui, &self.entropy_data);
+
+                    ui.separator();
+                    ui.heading("Hex View");
+                    ui.checkbox(&mut self.hex_byte_colors_enabled, "Byte colors");
+                    ui.label("Color Theme");
+                    for (idx, theme) in self.hex_color_themes.iter().enumerate() {
+                        ui.selectable_value(
+                            &mut self.hex_color_theme_index,
+                            idx,
+                            theme.name.as_str(),
+                        );
+                    }
                 });
             });
 
@@ -451,6 +475,8 @@ impl eframe::App for App {
                 &mut self.hex_first_row,
                 &mut self.hex_focused,
                 &mut self.hex_selection,
+                self.hex_byte_colors_enabled,
+                &self.hex_color_themes[self.hex_color_theme_index],
             );
 
             if self.sync_cooldown > 0 {

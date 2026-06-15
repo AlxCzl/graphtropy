@@ -1,6 +1,137 @@
+use std::fs;
+use std::path::PathBuf;
+
 use egui::{Color32, Rect, Sense, TextStyle, pos2, vec2};
+use serde::Deserialize;
 
 const BYTES_PER_ROW: usize = 16;
+
+#[derive(Clone)]
+pub struct HexColorTheme {
+    pub name: String,
+    dark: HexColorPalette,
+    light: HexColorPalette,
+}
+
+#[derive(Clone)]
+struct HexColorPalette {
+    null: Color32,
+    whitespace: Color32,
+    printable_ascii: Color32,
+    control_ascii: Color32,
+    non_ascii: Color32,
+}
+
+#[derive(Deserialize)]
+struct HexThemeFile {
+    name: String,
+    dark: HexColorPaletteFile,
+    light: HexColorPaletteFile,
+}
+
+#[derive(Deserialize)]
+struct HexColorPaletteFile {
+    null: String,
+    whitespace: String,
+    printable_ascii: String,
+    control_ascii: String,
+    non_ascii: String,
+}
+
+impl HexColorTheme {
+    fn palette(&self, dark_mode: bool) -> &HexColorPalette {
+        if dark_mode {
+            &self.dark
+        } else {
+            &self.light
+        }
+    }
+}
+
+pub fn load_hex_color_themes() -> Vec<HexColorTheme> {
+    ensure_default_hex_color_themes();
+
+    let Some(dir) = hex_color_themes_dir() else {
+        return embedded_hex_color_themes();
+    };
+    let Ok(entries) = fs::read_dir(&dir) else {
+        return embedded_hex_color_themes();
+    };
+
+    let mut custom_paths: Vec<_> = entries
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| path.extension().is_some_and(|extension| extension == "toml"))
+        .filter(|path| {
+            let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+                return false;
+            };
+            !default_hex_color_theme_files()
+                .iter()
+                .any(|(default_file_name, _)| file_name == *default_file_name)
+        })
+        .collect();
+    custom_paths.sort();
+
+    let mut themes: Vec<_> = default_hex_color_theme_files()
+        .iter()
+        .filter_map(|(file_name, fallback_contents)| {
+            let path = dir.join(file_name);
+            let contents = fs::read_to_string(path).unwrap_or_else(|_| fallback_contents.to_string());
+            parse_hex_color_theme(&contents).ok()
+        })
+        .collect();
+
+    themes.extend(
+        custom_paths
+            .iter()
+            .filter_map(|path| fs::read_to_string(path).ok())
+            .filter_map(|contents| parse_hex_color_theme(&contents).ok()),
+    );
+
+    if themes.is_empty() {
+        themes = embedded_hex_color_themes();
+    }
+
+    themes
+}
+
+fn embedded_hex_color_themes() -> Vec<HexColorTheme> {
+    default_hex_color_theme_files()
+        .iter()
+        .map(|(_, contents)| {
+            parse_hex_color_theme(contents).expect("embedded hex color theme must be valid")
+        })
+        .collect()
+}
+
+fn default_hex_color_theme_files() -> [(&'static str, &'static str); 3] {
+    [
+        ("monokai.toml", include_str!("../hex_themes/monokai.toml")),
+        ("cyberpunk.toml", include_str!("../hex_themes/cyberpunk.toml")),
+        ("rainbow.toml", include_str!("../hex_themes/rainbow.toml")),
+    ]
+}
+
+fn hex_color_themes_dir() -> Option<PathBuf> {
+    dirs::config_dir().map(|dir| dir.join("graphtropy").join("themes").join("hexview"))
+}
+
+fn ensure_default_hex_color_themes() {
+    let Some(dir) = hex_color_themes_dir() else {
+        return;
+    };
+    if fs::create_dir_all(&dir).is_err() {
+        return;
+    }
+
+    for (file_name, contents) in default_hex_color_theme_files() {
+        let path = dir.join(file_name);
+        if !path.exists() {
+            let _ = fs::write(path, contents);
+        }
+    }
+}
 
 fn hex_str(b: u8) -> &'static str {
     static TABLE: std::sync::OnceLock<[String; 256]> = std::sync::OnceLock::new();
@@ -15,6 +146,8 @@ pub fn render(
     first_row: &mut usize,
     focused: &mut bool,
     selection: &mut Option<(usize, usize)>,
+    byte_colors_enabled: bool,
+    byte_color_theme: &HexColorTheme,
 ) -> u64 {
     let total_rows = data.len().div_ceil(BYTES_PER_ROW);
     let font_size = ui.text_style_height(&TextStyle::Monospace);
@@ -205,6 +338,8 @@ pub fn render(
 
             let color = if is_selected {
                 strong
+            } else if byte_colors_enabled {
+                byte_color(byte, byte_color_theme, ui.visuals().dark_mode)
             } else if is_cursor_row {
                 strong
             } else {
@@ -235,6 +370,8 @@ pub fn render(
             };
             let color = if is_selected {
                 strong
+            } else if byte_colors_enabled {
+                byte_color(byte, byte_color_theme, ui.visuals().dark_mode)
             } else if is_cursor_row {
                 highlight
             } else {
@@ -326,6 +463,75 @@ pub fn render(
     }
 
     (*first_row * BYTES_PER_ROW) as u64
+}
+
+fn parse_hex_color_theme(contents: &str) -> Result<HexColorTheme, String> {
+    let theme: HexThemeFile = toml::from_str(contents).map_err(|err| err.to_string())?;
+    Ok(HexColorTheme {
+        name: theme.name,
+        dark: parse_hex_color_palette(theme.dark)?,
+        light: parse_hex_color_palette(theme.light)?,
+    })
+}
+
+fn parse_hex_color_palette(palette: HexColorPaletteFile) -> Result<HexColorPalette, String> {
+    Ok(HexColorPalette {
+        null: parse_hex_color(&palette.null)?,
+        whitespace: parse_hex_color(&palette.whitespace)?,
+        printable_ascii: parse_hex_color(&palette.printable_ascii)?,
+        control_ascii: parse_hex_color(&palette.control_ascii)?,
+        non_ascii: parse_hex_color(&palette.non_ascii)?,
+    })
+}
+
+fn parse_hex_color(value: &str) -> Result<Color32, String> {
+    let value = value.strip_prefix('#').unwrap_or(value);
+    if value.len() != 6 {
+        return Err(format!("invalid color #{value}"));
+    }
+
+    let red = u8::from_str_radix(&value[0..2], 16).map_err(|err| err.to_string())?;
+    let green = u8::from_str_radix(&value[2..4], 16).map_err(|err| err.to_string())?;
+    let blue = u8::from_str_radix(&value[4..6], 16).map_err(|err| err.to_string())?;
+
+    Ok(Color32::from_rgb(red, green, blue))
+}
+
+fn byte_color(byte: u8, theme: &HexColorTheme, dark_mode: bool) -> Color32 {
+    let class = byte_class(byte);
+    let palette = theme.palette(dark_mode);
+    palette.color_for(class)
+}
+
+#[derive(Clone, Copy)]
+enum ByteClass {
+    Null,
+    Whitespace,
+    PrintableAscii,
+    ControlAscii,
+    NonAscii,
+}
+
+fn byte_class(byte: u8) -> ByteClass {
+    match byte {
+        0x00 => ByteClass::Null,
+        b'\t' | b'\n' | b'\r' | 0x0b | 0x0c | b' ' => ByteClass::Whitespace,
+        0x21..=0x7e => ByteClass::PrintableAscii,
+        0x01..=0x1f | 0x7f => ByteClass::ControlAscii,
+        _ => ByteClass::NonAscii,
+    }
+}
+
+impl HexColorPalette {
+    fn color_for(&self, class: ByteClass) -> Color32 {
+        match class {
+            ByteClass::Null => self.null,
+            ByteClass::Whitespace => self.whitespace,
+            ByteClass::PrintableAscii => self.printable_ascii,
+            ByteClass::ControlAscii => self.control_ascii,
+            ByteClass::NonAscii => self.non_ascii,
+        }
+    }
 }
 
 fn format_hex_spaced(bytes: &[u8]) -> String {
