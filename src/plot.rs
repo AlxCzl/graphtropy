@@ -65,18 +65,27 @@ pub fn render(
                     .width(1.5)
                     .gradient_color(gradient.clone(), false),
             );
+
+            let hover = plot_ui.pointer_coordinate();
+            let primary_down = plot_ui.ctx().input(|i| i.pointer.primary_down());
+            let effective_cursor = if primary_down {
+                hover.map(|c| c.x).unwrap_or(cursor_offset as f64)
+            } else {
+                cursor_offset as f64
+            };
+
             let cursor_color = if dark_mode {
                 Color32::from_rgba_premultiplied(255, 255, 255, 180)
             } else {
                 Color32::from_rgba_premultiplied(0, 0, 0, 160)
             };
             plot_ui.vline(
-                VLine::new("cursor", cursor_offset as f64)
+                VLine::new("cursor", effective_cursor)
                     .color(cursor_color)
                     .width(1.0),
             );
 
-            plot_ui.pointer_coordinate()
+            hover
         });
 
     if let Some(coord) = response.inner {
@@ -122,12 +131,11 @@ pub fn render(
             *view_x_max = new_max;
         }
 
-        // Pan with middle mouse drag or Zoom mode drag
         let drag_delta = ui.input(|i| i.pointer.delta());
         let primary_down = ui.input(|i| i.pointer.primary_down());
         let middle_down = ui.input(|i| i.pointer.middle_down());
 
-        if middle_down || primary_down {
+        if middle_down {
             let width = plot_rect.width() as f64;
             let dx = -drag_delta.x as f64 * (*view_x_max - *view_x_min) / width;
             let mut new_min = *view_x_min + dx;
@@ -144,7 +152,7 @@ pub fn render(
             *view_x_max = new_max.min(x_max);
         }
 
-        if ui.input(|i| i.pointer.any_click()) {
+        if primary_down {
             if let Some(x) = *last_hover_x {
                 let offset = (x as u64).min(file_size.saturating_sub(1));
                 clicked_offset = Some(offset);
