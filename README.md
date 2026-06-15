@@ -18,16 +18,26 @@ Fast, lightweight and interactive binary entropy visualizer with an hex viewer a
 
 ## Install
 
+### On Linux
+
 ```bash
 ./install.sh
 ```
 
 This builds and installs the binary via `cargo install`, and sets up the `.desktop` file and icon so graphtropy appears in your application launcher and can open files from your file manager.
 
-To only build the binary without desktop integration:
+### On macOS
+
+```bash
+cargo install --path .
+```
+
+The GUI works on macOS without extra runtime dependencies. `cargo install` installs the `graphtropy` binary into your Cargo bin directory.
+
+To only build the binary without installation:
 
 ```
-cargo install --path .
+cargo build --release
 ```
 
 ## Usage
