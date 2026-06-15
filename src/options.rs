@@ -205,6 +205,40 @@ impl ColorTheme {
             },
         }
     }
+
+    fn gruvbox_dark() -> Self {
+        ColorTheme {
+            name: "Gruvbox Dark".to_string(),
+            bands: vec![
+                (0.0, Color32::from_rgb(69, 133, 136)),   // aqua
+                (0.25, Color32::from_rgb(152, 151, 26)),   // green
+                (0.625, Color32::from_rgb(214, 93, 14)),   // orange
+                (0.875, Color32::from_rgb(204, 36, 29)),   // red
+            ],
+            bg: Color32::from_rgb(40, 40, 40),             // bg0
+            text: Color32::from_rgb(189, 174, 147),        // fg3
+            grid: Color32::from_rgb(80, 73, 69),           // bg2
+            caption: Color32::from_rgb(235, 219, 178),     // fg1
+            dark: true,
+        }
+    }
+
+    fn gruvbox_light() -> Self {
+        ColorTheme {
+            name: "Gruvbox Light".to_string(),
+            bands: vec![
+                (0.0, Color32::from_rgb(7, 102, 120)),     // aqua
+                (0.25, Color32::from_rgb(121, 116, 14)),    // green
+                (0.625, Color32::from_rgb(175, 58, 3)),     // orange
+                (0.875, Color32::from_rgb(157, 0, 6)),      // red
+            ],
+            bg: Color32::from_rgb(251, 241, 199),           // bg0
+            text: Color32::from_rgb(80, 73, 69),            // fg2
+            grid: Color32::from_rgb(213, 196, 161),         // bg2
+            caption: Color32::from_rgb(60, 56, 54),         // fg1
+            dark: false,
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -258,6 +292,11 @@ fn ensure_default_themes() {
         let _ = fs::write(
             dark_path,
             r##"name = "Dark"
+dark = true
+bg = "#1E1E1E"
+text = "#A0A0A0"
+grid = "#323232"
+caption = "#C8C8C8"
 
 [[bands]]
 threshold = 0.0
@@ -283,6 +322,11 @@ color = "#F44336"
         let _ = fs::write(
             light_path,
             r##"name = "Light"
+dark = false
+bg = "#F5F5F5"
+text = "#3C3C3C"
+grid = "#C8C8C8"
+caption = "#282828"
 
 [[bands]]
 threshold = 0.0
@@ -299,6 +343,66 @@ color = "#E67E22"
 [[bands]]
 threshold = 0.875
 color = "#B71C1C"
+"##,
+        );
+    }
+
+    let gruvbox_dark_path = dir.join("gruvbox-dark.toml");
+    if !gruvbox_dark_path.exists() {
+        let _ = fs::write(
+            gruvbox_dark_path,
+            r##"name = "Gruvbox Dark"
+dark = true
+bg = "#282828"
+text = "#BDAE93"
+grid = "#504945"
+caption = "#EBDBB2"
+
+[[bands]]
+threshold = 0.0
+color = "#458588"
+
+[[bands]]
+threshold = 0.25
+color = "#98971A"
+
+[[bands]]
+threshold = 0.625
+color = "#D65D0E"
+
+[[bands]]
+threshold = 0.875
+color = "#CC241D"
+"##,
+        );
+    }
+
+    let gruvbox_light_path = dir.join("gruvbox-light.toml");
+    if !gruvbox_light_path.exists() {
+        let _ = fs::write(
+            gruvbox_light_path,
+            r##"name = "Gruvbox Light"
+dark = false
+bg = "#FBF1C7"
+text = "#504945"
+grid = "#D5C4A1"
+caption = "#3C3836"
+
+[[bands]]
+threshold = 0.0
+color = "#076678"
+
+[[bands]]
+threshold = 0.25
+color = "#79740E"
+
+[[bands]]
+threshold = 0.625
+color = "#AF3A03"
+
+[[bands]]
+threshold = 0.875
+color = "#9D0006"
 "##,
         );
     }
