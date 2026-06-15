@@ -1,6 +1,6 @@
 # graphtropy
 
-Fast, lightweight and interactive binary entropy visualizer with an hex viewer and a PNG exporter.
+Fast, lightweight and interactive binary entropy visualizer for Linux and macOS, with an hex viewer and a PNG exporter.
 
 ![GUI](images/gui.png)
 ![Dark theme export](images/bash-dark.png)
