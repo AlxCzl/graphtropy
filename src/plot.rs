@@ -66,26 +66,18 @@ pub fn render(
                     .gradient_color(gradient.clone(), false),
             );
 
-            let hover = plot_ui.pointer_coordinate();
-            let primary_down = plot_ui.ctx().input(|i| i.pointer.primary_down());
-            let effective_cursor = if primary_down {
-                hover.map(|c| c.x).unwrap_or(cursor_offset as f64)
-            } else {
-                cursor_offset as f64
-            };
-
             let cursor_color = if dark_mode {
                 Color32::from_rgba_premultiplied(255, 255, 255, 180)
             } else {
                 Color32::from_rgba_premultiplied(0, 0, 0, 160)
             };
             plot_ui.vline(
-                VLine::new("cursor", effective_cursor)
+                VLine::new("cursor", cursor_offset as f64)
                     .color(cursor_color)
                     .width(1.0),
             );
 
-            hover
+            plot_ui.pointer_coordinate()
         });
 
     if let Some(coord) = response.inner {

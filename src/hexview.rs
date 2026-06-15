@@ -41,7 +41,7 @@ fn hex_str(b: u8) -> &'static str {
 pub fn render(
     ui: &mut egui::Ui,
     data: &[u8],
-    cursor_offset: u64,
+    cursor_offset: &mut u64,
     first_row: &mut usize,
     focused: &mut bool,
     selection: &mut Option<(usize, usize)>,
@@ -100,15 +100,37 @@ pub fn render(
 
     // Page Up / Page Down
     if *focused {
-        let page = visible_rows.max(1);
-        if ui.input(|i| i.key_pressed(egui::Key::PageDown)) {
-            *first_row = (*first_row + page).min(max_first_row);
-        }
-        if ui.input(|i| i.key_pressed(egui::Key::PageUp)) {
-            *first_row = first_row.saturating_sub(page);
-        }
         if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
             *selection = None;
+        }
+        let max_offset = data.len().saturating_sub(1) as u64;
+        let page_bytes = (visible_rows.max(1) * BYTES_PER_ROW) as u64;
+        let (left, right, up, down, pgup, pgdn, shift_held) = ui.input(|i| (
+            i.key_pressed(egui::Key::ArrowLeft),
+            i.key_pressed(egui::Key::ArrowRight),
+            i.key_pressed(egui::Key::ArrowUp),
+            i.key_pressed(egui::Key::ArrowDown),
+            i.key_pressed(egui::Key::PageUp),
+            i.key_pressed(egui::Key::PageDown),
+            i.modifiers.shift,
+        ));
+        if left || right || up || down || pgup || pgdn {
+            let anchor = if shift_held {
+                selection.map(|(a, _)| a).unwrap_or(*cursor_offset as usize)
+            } else {
+                0
+            };
+            if left  { *cursor_offset = cursor_offset.saturating_sub(1); }
+            if right { *cursor_offset = (*cursor_offset + 1).min(max_offset); }
+            if up    { *cursor_offset = cursor_offset.saturating_sub(BYTES_PER_ROW as u64); }
+            if down  { *cursor_offset = (*cursor_offset + BYTES_PER_ROW as u64).min(max_offset); }
+            if pgup  { *cursor_offset = cursor_offset.saturating_sub(page_bytes); }
+            if pgdn  { *cursor_offset = (*cursor_offset + page_bytes).min(max_offset); }
+            if shift_held {
+                *selection = Some((anchor, *cursor_offset as usize));
+            } else {
+                *selection = None;
+            }
         }
     }
 
@@ -120,7 +142,12 @@ pub fn render(
     }
 
     *first_row = (*first_row).min(max_first_row);
-    let cursor_row = cursor_offset as usize / BYTES_PER_ROW;
+    let cursor_row = *cursor_offset as usize / BYTES_PER_ROW;
+    if cursor_row < *first_row {
+        *first_row = cursor_row;
+    } else if cursor_row >= *first_row + visible_rows {
+        *first_row = cursor_row.saturating_sub(visible_rows - 1).min(max_first_row);
+    }
     let end_row = (*first_row + visible_rows).min(total_rows);
     let visible_start = *first_row * BYTES_PER_ROW;
     let visible_end = (end_row * BYTES_PER_ROW).min(data.len());
@@ -166,6 +193,7 @@ pub fn render(
     if content_response.clicked_by(egui::PointerButton::Primary) {
         if let Some(pos) = content_response.interact_pointer_pos() {
             if let Some(idx) = byte_from_pos(pos) {
+                *cursor_offset = idx as u64;
                 if shift_held {
                     if let Some((anchor, _)) = *selection {
                         *selection = Some((anchor, idx));
@@ -173,7 +201,7 @@ pub fn render(
                         *selection = Some((idx, idx));
                     }
                 } else {
-                    *selection = Some((idx, idx));
+                    *selection = None;
                 }
             }
         }
@@ -181,6 +209,7 @@ pub fn render(
     if content_response.drag_started_by(egui::PointerButton::Primary) {
         if let Some(pos) = content_response.interact_pointer_pos() {
             if let Some(idx) = byte_from_pos(pos) {
+                *cursor_offset = idx as u64;
                 *selection = Some((idx, idx));
             }
         }
@@ -188,6 +217,7 @@ pub fn render(
     if content_response.dragged_by(egui::PointerButton::Primary) {
         if let Some(pos) = content_response.interact_pointer_pos() {
             if let Some(idx) = byte_from_pos(pos) {
+                *cursor_offset = idx as u64;
                 if let Some((anchor, _)) = *selection {
                     *selection = Some((anchor, idx));
                 }
@@ -212,6 +242,11 @@ pub fn render(
     let weak = ui.visuals().weak_text_color();
     let highlight = ui.visuals().selection.stroke.color;
     let sel_bg = ui.visuals().selection.bg_fill;
+    let cursor_bg = if ui.visuals().dark_mode {
+        Color32::from_rgba_premultiplied(255, 255, 255, 25)
+    } else {
+        Color32::from_rgba_premultiplied(0, 0, 0, 20)
+    };
     let search_bg = if ui.visuals().dark_mode {
         Color32::from_rgb(90, 75, 20)
     } else {
@@ -290,6 +325,7 @@ pub fn render(
         for (i, &byte) in row_data.iter().enumerate() {
             let global_idx = offset + i;
             let bx = byte_hex_x(i);
+            let is_cursor_byte = global_idx == *cursor_offset as usize;
             let is_selected =
                 sel_range.is_some_and(|(lo, hi)| global_idx >= lo && global_idx <= hi);
 
@@ -299,10 +335,18 @@ pub fn render(
                     2.0,
                     sel_bg,
                 );
+            } else if is_cursor_byte {
+                painter.rect_filled(
+                    Rect::from_min_size(pos2(bx - 1.0, y), vec2(2.0 * char_w + 2.0, row_height)),
+                    2.0,
+                    cursor_bg,
+                );
             }
 
             let color = if is_selected {
                 strong
+            } else if is_cursor_byte {
+                highlight
             } else if let Some(palette) = hex_palette {
                 byte_color(byte, palette)
             } else if is_cursor_row {
@@ -317,6 +361,7 @@ pub fn render(
         for (i, &byte) in row_data.iter().enumerate() {
             let global_idx = offset + i;
             let ax = ascii_x + (1 + i) as f32 * char_w;
+            let is_cursor_byte = global_idx == *cursor_offset as usize;
             let is_selected =
                 sel_range.is_some_and(|(lo, hi)| global_idx >= lo && global_idx <= hi);
 
@@ -325,6 +370,12 @@ pub fn render(
                     Rect::from_min_size(pos2(ax, y), vec2(char_w, row_height)),
                     0.0,
                     sel_bg,
+                );
+            } else if is_cursor_byte {
+                painter.rect_filled(
+                    Rect::from_min_size(pos2(ax, y), vec2(char_w, row_height)),
+                    0.0,
+                    cursor_bg,
                 );
             }
 
@@ -335,6 +386,8 @@ pub fn render(
             };
             let color = if is_selected {
                 strong
+            } else if is_cursor_byte {
+                highlight
             } else if let Some(palette) = hex_palette {
                 byte_color(byte, palette)
             } else if is_cursor_row {

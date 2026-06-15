@@ -992,10 +992,11 @@ impl eframe::App for App {
             } else {
                 None
             };
+            let old_cursor = self.cursor_offset;
             let hex_offset = crate::hexview::render(
                 ui,
                 &self.mmap,
-                self.cursor_offset,
+                &mut self.cursor_offset,
                 &mut self.hex_first_row,
                 &mut self.hex_focused,
                 &mut self.hex_selection,
@@ -1006,7 +1007,9 @@ impl eframe::App for App {
                 self.search_selected,
             );
 
-            if self.sync_cooldown > 0 {
+            if self.cursor_offset != old_cursor {
+                self.sync_cooldown = 5;
+            } else if self.sync_cooldown > 0 {
                 self.sync_cooldown -= 1;
             } else if hex_offset != self.last_hex_offset {
                 self.cursor_offset = hex_offset;
