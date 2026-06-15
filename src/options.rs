@@ -246,8 +246,32 @@ fn parse_hex_color(s: &str) -> Option<Color32> {
     Some(Color32::from_rgb(r, g, b))
 }
 
+fn config_dir() -> Option<PathBuf> {
+    dirs::config_dir().map(|d| d.join("graphtropy"))
+}
+
 fn themes_dir() -> Option<PathBuf> {
-    dirs::config_dir().map(|d| d.join("graphtropy").join("themes"))
+    config_dir().map(|d| d.join("themes"))
+}
+
+#[derive(Deserialize, Default)]
+struct ConfigFile {
+    default_theme: Option<String>,
+}
+
+pub fn load_default_theme() -> Option<String> {
+    let path = config_dir()?.join("config.toml");
+    let contents = fs::read_to_string(path).ok()?;
+    let config: ConfigFile = toml::from_str(&contents).ok()?;
+    config.default_theme
+}
+
+pub fn save_default_theme(name: &str) {
+    let Some(dir) = config_dir() else { return };
+    let _ = fs::create_dir_all(&dir);
+    let path = dir.join("config.toml");
+    let content = format!("default_theme = {name:?}\n");
+    let _ = fs::write(path, content);
 }
 
 fn ensure_default_themes() {
@@ -449,20 +473,27 @@ pub struct Options {
     pub custom_block_input: String,
     pub custom_step_input: String,
     pub themes: Vec<ColorTheme>,
+    default_theme_name: Option<String>,
 }
 
 impl Options {
     pub fn new(block_size: usize, step: usize) -> Self {
+        let themes = load_themes();
+        let default_name = load_default_theme();
+        let theme_index = default_name.as_ref()
+            .and_then(|name| themes.iter().position(|t| t.name.eq_ignore_ascii_case(name)))
+            .unwrap_or(0);
         Self {
             algorithm: Algorithm::Shannon,
             block_size,
             step,
-            theme_index: 0,
+            theme_index,
             hex_byte_colors: true,
             needs_recompute: false,
             custom_block_input: String::new(),
             custom_step_input: String::new(),
-            themes: load_themes(),
+            themes,
+            default_theme_name: default_name,
         }
     }
 
@@ -569,6 +600,14 @@ impl Options {
                     ui.selectable_value(&mut self.theme_index, i, &name);
                 }
             });
+        let is_default = self.default_theme_name.as_ref()
+            .is_some_and(|d| d.eq_ignore_ascii_case(&current_name));
+        if !is_default {
+            if ui.button("Set as default").clicked() {
+                save_default_theme(&current_name);
+                self.default_theme_name = Some(current_name.clone());
+            }
+        }
         ui.checkbox(&mut self.hex_byte_colors, "Hex byte colors");
         if let Some(dir) = themes_dir() {
             ui.label(

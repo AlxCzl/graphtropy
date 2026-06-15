@@ -54,9 +54,9 @@ struct Cli {
     #[arg(long)]
     no_caption: bool,
 
-    /// Theme name for export (e.g. "Dark", "Light")
-    #[arg(short, long, default_value = "Dark")]
-    theme: String,
+    /// Theme name for export (e.g. "Dark", "Light"); uses config default if unset
+    #[arg(short, long)]
+    theme: Option<String>,
 }
 
 const MAX_POINTS: usize = 4096;
@@ -125,8 +125,10 @@ fn main() -> eframe::Result {
         let _ = mmap.advise(memmap2::Advice::Normal);
 
         let themes = options::load_themes();
+        let fallback = options::load_default_theme().unwrap_or_else(|| "Dark".to_string());
+        let theme_name = cli.theme.as_deref().unwrap_or(&fallback);
         let theme = themes.iter()
-            .find(|t| t.name.eq_ignore_ascii_case(&cli.theme))
+            .find(|t| t.name.eq_ignore_ascii_case(theme_name))
             .unwrap_or(&themes[0]);
         let (y_min, y_max) = entropy::Algorithm::Shannon.y_range();
 
