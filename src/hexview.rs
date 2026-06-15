@@ -88,13 +88,14 @@ pub fn render(
         *focused = pointer_in_hex;
     }
 
-    // Scroll wheel
+    // Scroll wheel — move cursor like arrow up/down
     if pointer_in_hex {
         let scroll_delta = ui.input(|i| i.raw_scroll_delta.y);
         if scroll_delta != 0.0 {
-            let rows_delta = (-scroll_delta / row_height).round() as isize;
-            let new_row = (*first_row as isize + rows_delta).clamp(0, max_first_row as isize);
-            *first_row = new_row as usize;
+            let rows_delta = (-scroll_delta / row_height).round() as i64;
+            let max_offset = data.len().saturating_sub(1) as i64;
+            let byte_delta = rows_delta * BYTES_PER_ROW as i64;
+            *cursor_offset = (*cursor_offset as i64 + byte_delta).clamp(0, max_offset) as u64;
         }
     }
 
