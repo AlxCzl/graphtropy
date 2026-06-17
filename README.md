@@ -28,6 +28,13 @@ This builds and installs the binary via `cargo install`, and sets up the `.deskt
 
 ### On macOS
 
+You can install `graphtropy` using `homebrew` (see [this repo](https://github.com/sagittarius-a/homebrew-graphtropy)):
+```bash
+brew tap sagittarius-a/graphtropy
+brew install --cask graphtropy
+```
+
+You can also do it manually, using the install script:
 ```bash
 ./install.sh
 ```
